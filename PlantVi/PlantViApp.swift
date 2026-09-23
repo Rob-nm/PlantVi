@@ -10,12 +10,16 @@ import CoreData
 
 @main
 struct PlantViApp: App {
+    @StateObject private var gameManager = GameManager()
     let persistenceController = PersistenceController.shared
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
+                .environmentObject(gameManager)
+
         }
     }
 }
+
