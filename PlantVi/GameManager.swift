@@ -45,6 +45,11 @@ class GameManager: ObservableObject {
         recuperarVida(20)
     }
     
+    // Recompensa obtenida de los minijuegos
+    func agregarAgua(cantidad: Int = 1) {
+        inventarioAgua += cantidad
+    }
+    
     func generarPlagaAleatoria() {
         guard !tienePlaga && nivelVida > 20 else { return }
         tienePlaga = true

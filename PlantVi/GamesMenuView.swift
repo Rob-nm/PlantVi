@@ -82,19 +82,20 @@ struct GamesMenuView: View {
     }
 
     // MARK: - Enrutador de Juegos
-    @ViewBuilder
-    private func destinoJuego(para juego: Juego) -> some View {
-        switch juego.nombre {
-        case "Recicla y Abona":
-            AbonoGameView()
-        // Cuando tengas listos los demás juegos, agregas sus casos aquí:
-        // case "Recolecta Agua":
-        //     AguaGameView()
-        default:
-            // Llama a tu archivo existente PlaceholderGameView.swift
-            PlaceholderGameView(juego: juego)
+    
+        @ViewBuilder
+        private func destinoJuego(para juego: Juego) -> some View {
+            switch juego.nombre {
+            case "Recolecta Agua":
+                RecolectaAguaView() // ¡Ya no requiere pasar bindings manualmente!
+                
+            case "Recicla y Abona":
+                AbonoGameView()
+                
+            default:
+                PlaceholderGameView(juego: juego)
+            }
         }
-    }
 }
 
 // MARK: - Tarjeta visual de cada juego
