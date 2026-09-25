@@ -1,13 +1,8 @@
 //
-//  MemoramaForestal.swift
+//  MemoramaForestalView.swift
 //  PlantVi
 //
 //  Created by Brandiuxx on 24/09/26.
-//
-
-//
-//  MemoramaForestalView.swift
-//  PlantVi
 //
 
 import SwiftUI
@@ -43,6 +38,11 @@ struct MemoramaForestalView: View {
     @State private var juegoCompletado: Bool = false
     @State private var recompensaEntregada: Bool = false
 
+    // Generadores sensoriales
+    private let exitoHaptico = UINotificationFeedbackGenerator()
+    private let toqueHaptico = UIImpactFeedbackGenerator(style: .light)
+    private let falloHaptico = UINotificationFeedbackGenerator()
+
     let columnas = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12),
@@ -65,6 +65,7 @@ struct MemoramaForestalView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "cross.vial.fill")
                             .foregroundColor(.orange)
+                            .accessibilityHidden(true)
                         Text("Sprays: \(gameManager.inventarioSpray)")
                             .font(.headline)
                     }
@@ -72,12 +73,15 @@ struct MemoramaForestalView: View {
                     .padding(.vertical, 8)
                     .background(.ultraThinMaterial)
                     .clipShape(Capsule())
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Sprays curativos en mochila: \(gameManager.inventarioSpray)")
 
                     Spacer()
 
                     Text("Intentos: \(intentos)")
                         .font(.subheadline.bold())
                         .foregroundColor(.secondary)
+                        .accessibilityLabel("Intentos realizados: \(intentos)")
                 }
                 .padding(.horizontal)
 
@@ -86,6 +90,7 @@ struct MemoramaForestalView: View {
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
+                    .accessibilityLabel("Instrucción: Encuentra todas las parejas del bosque para ganar un Spray Anti-Plagas.")
 
                 // Tablero de 12 cartas (3x4)
                 LazyVGrid(columns: columnas, spacing: 12) {
@@ -94,6 +99,12 @@ struct MemoramaForestalView: View {
                             .onTapGesture {
                                 tocarCarta(en: indice)
                             }
+                            // Soporte integral para VoiceOver
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(etiquetaAccesible(para: carta, indice: indice))
+                            .accessibilityValue(valorAccesible(para: carta))
+                            .accessibilityHint(pistaAccesible(para: carta))
+                            .accessibilityAddTraits(.isButton)
                     }
                 }
                 .padding(.horizontal)
@@ -111,6 +122,8 @@ struct MemoramaForestalView: View {
                         .clipShape(Capsule())
                 }
                 .padding(.bottom, 16)
+                .accessibilityLabel("Reiniciar tablero de cartas")
+                .accessibilityHint("Baraja las cartas y comienza de nuevo el juego")
             }
         }
         .navigationTitle("Memorama Forestal 🌲")
@@ -129,7 +142,34 @@ struct MemoramaForestalView: View {
         }
     }
 
-    // MARK: - Lógica de Juego
+    // MARK: - Accesibilidad y Lectura de VoiceOver
+
+    private func etiquetaAccesible(para carta: CartaMemorama, indice: Int) -> String {
+        return "Carta \(indice + 1) de \(cartas.count)"
+    }
+
+    private func valorAccesible(para carta: CartaMemorama) -> String {
+        if carta.estaEmparejada {
+            return "\(carta.nombre), pareja ya encontrada"
+        } else if carta.estaVolteada {
+            return "Mostrando \(carta.nombre)"
+        } else {
+            return "Oculta"
+        }
+    }
+
+    private func pistaAccesible(para carta: CartaMemorama) -> String {
+        if carta.estaEmparejada {
+            return "Esta pareja ya fue completada."
+        } else if carta.estaVolteada {
+            return "Carta descubierta. Selecciona una segunda carta para comparar."
+        } else {
+            return "Toca dos veces para descubrir esta carta."
+        }
+    }
+
+    // MARK: - Lógica de Juego y Anuncios Auditivos
+
     private func reiniciarJuego() {
         var nuevasCartas: [CartaMemorama] = []
         for par in paresDisponibles {
@@ -142,17 +182,31 @@ struct MemoramaForestalView: View {
         juegoCompletado = false
         recompensaEntregada = false
         bloqueado = false
+
+        UIAccessibility.post(
+            notification: .announcement,
+            argument: "Tablero reiniciado con 12 cartas forestales cubiertas."
+        )
     }
 
     private func tocarCarta(en indice: Int) {
         guard !bloqueado else { return }
         guard !cartas[indice].estaVolteada && !cartas[indice].estaEmparejada else { return }
 
+        // Vibración háptica al pulsar
+        toqueHaptico.impactOccurred()
+
         // Voltear la carta
         withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
             cartas[indice].estaVolteada = true
         }
         indicesSeleccionados.append(indice)
+
+        // Anuncio sonoro inmediato de la carta descubierta
+        UIAccessibility.post(
+            notification: .announcement,
+            argument: "Descubriste: \(cartas[indice].nombre)"
+        )
 
         // Si se han volteado 2 cartas, evaluar
         if indicesSeleccionados.count == 2 {
@@ -170,6 +224,15 @@ struct MemoramaForestalView: View {
                     }
                     indicesSeleccionados.removeAll()
                     bloqueado = false
+
+                    exitoHaptico.notificationOccurred(.success)
+
+                    // Anuncio de par conseguido
+                    UIAccessibility.post(
+                        notification: .announcement,
+                        argument: "¡Excelente! Encontraste la pareja de \(cartas[primerIndice].nombre)."
+                    )
+
                     verificarVictoria()
                 }
             } else {
@@ -181,6 +244,14 @@ struct MemoramaForestalView: View {
                     }
                     indicesSeleccionados.removeAll()
                     bloqueado = false
+
+                    falloHaptico.notificationOccurred(.warning)
+
+                    // Anuncio de no coincidencia
+                    UIAccessibility.post(
+                        notification: .announcement,
+                        argument: "No coinciden. Las cartas se han vuelto a cubrir."
+                    )
                 }
             }
         }
@@ -192,6 +263,13 @@ struct MemoramaForestalView: View {
             // Entregar el spray al inventario global
             gameManager.inventarioSpray += 1
             juegoCompletado = true
+
+            exitoHaptico.notificationOccurred(.success)
+
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: "¡Felicidades! Has protegido el bosque completando todas las parejas. Ganaste 1 spray anti plagas para tu planta."
+            )
         }
     }
 }
@@ -207,6 +285,7 @@ struct TarjetaMemoramaView: View {
                 VStack(spacing: 4) {
                     Text(carta.icono)
                         .font(.system(size: 38))
+                        .accessibilityHidden(true)
                     Text(carta.nombre)
                         .font(.system(size: 9, weight: .bold))
                         .foregroundColor(.primary)
@@ -236,6 +315,7 @@ struct TarjetaMemoramaView: View {
                     Image(systemName: "leaf.fill")
                         .font(.title2)
                         .foregroundColor(.white.opacity(0.8))
+                        .accessibilityHidden(true)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 95)

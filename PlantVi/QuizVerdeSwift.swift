@@ -4,14 +4,10 @@
 //
 //  Created by Brandiuxx on 24/09/26.
 //
-//
-//  QuizVerdeSwift.swift
-//  PlantVi
-//
 
 import SwiftUI
 
-//Modelo de Pregunta
+// MARK: - Modelo de Pregunta
 struct PreguntaQuiz: Identifiable {
     let id = UUID()
     let texto: String
@@ -20,6 +16,8 @@ struct PreguntaQuiz: Identifiable {
     let indiceCorrecto: Int
     let explicacion: String
 }
+
+// MARK: - Vista Principal
 struct QuizVerdeView: View {
     @EnvironmentObject var gameManager: GameManager
     @Environment(\.dismiss) private var dismiss
@@ -35,8 +33,8 @@ struct QuizVerdeView: View {
         PreguntaQuiz(
             texto: "¿Por qué parte toman los árboles el agua y los nutrientes de la tierra?",
             icono: "🌱",
-            opciones: ["Por las ramas", "Por las raíces", "Por las flores", "Por el tronco"],
-            indiceCorrecto: 1,
+            opciones: ["Por las raíces", "Por las ramas", "Por las flores", "Por el tronco"],
+            indiceCorrecto: 0,
             explicacion: "¡Muy bien! Las raíces subterráneas funcionan como popotes que absorben el agua del suelo."
         ),
         PreguntaQuiz(
@@ -70,6 +68,11 @@ struct QuizVerdeView: View {
     @State private var mostrarAlertaPremioFinal: Bool = false
     @State private var premioObtenidoTexto: String = ""
 
+    // Generadores hápticos nativos
+    private let exitoHaptico = UINotificationFeedbackGenerator()
+    private let alertaHaptica = UINotificationFeedbackGenerator()
+    private let seleccionHaptica = UISelectionFeedbackGenerator()
+
     private var preguntaActual: PreguntaQuiz? {
         guard !preguntasPartida.isEmpty && indicePreguntaActual < preguntasPartida.count else { return nil }
         return preguntasPartida[indicePreguntaActual]
@@ -86,10 +89,11 @@ struct QuizVerdeView: View {
 
             if let pregunta = preguntaActual {
                 VStack(spacing: 18) {
+                    // Barra superior: recursos e indicador de avance
                     HStack(spacing: 10) {
-                        RecursoBadge(icono: "💧", valor: gameManager.inventarioAgua)
-                        RecursoBadge(icono: "🌱", valor: gameManager.inventarioAbono)
-                        RecursoBadge(icono: "🧴", valor: gameManager.inventarioSpray)
+                        RecursoBadge(icono: "💧", valor: gameManager.inventarioAgua, recursoNombre: "Agua")
+                        RecursoBadge(icono: "🌱", valor: gameManager.inventarioAbono, recursoNombre: "Abono")
+                        RecursoBadge(icono: "🧴", valor: gameManager.inventarioSpray, recursoNombre: "Spray")
 
                         Spacer()
 
@@ -99,12 +103,15 @@ struct QuizVerdeView: View {
                             .padding(.vertical, 6)
                             .background(.ultraThinMaterial)
                             .clipShape(Capsule())
+                            .accessibilityLabel("Pregunta \(indicePreguntaActual + 1) de \(preguntasPartida.count)")
                     }
                     .padding(.horizontal)
 
+                    // Tarjeta de la Pregunta
                     VStack(spacing: 14) {
                         Text(pregunta.icono)
                             .font(.system(size: 60))
+                            .accessibilityHidden(true)
 
                         Text(pregunta.texto)
                             .font(.headline)
@@ -118,19 +125,24 @@ struct QuizVerdeView: View {
                     .cornerRadius(20)
                     .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
                     .padding(.horizontal)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Pregunta número \(indicePreguntaActual + 1): \(pregunta.texto)")
 
-        
+                    // Mensaje motivacional o explicativo
                     Text(mensajeMotivacional)
                         .font(.subheadline.bold())
                         .foregroundColor(respuestaAcertada ? .green : (indicesFallados.isEmpty ? .secondary : .orange))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                         .frame(height: 40)
+                        .accessibilityLabel("Mensaje: \(mensajeMotivacional)")
 
+                    // Opciones de respuesta
                     VStack(spacing: 12) {
                         ForEach(0..<pregunta.opciones.count, id: \.self) { indice in
                             BotonOpcionQuiz(
                                 texto: pregunta.opciones[indice],
+                                numeroOpcion: indice + 1,
                                 estadoBoton: estadoDeBoton(para: indice, pregunta: pregunta),
                                 alPresionar: {
                                     verificarRespuesta(indiceSeleccionado: indice, pregunta: pregunta)
@@ -143,6 +155,7 @@ struct QuizVerdeView: View {
 
                     Spacer()
 
+                    // Botón para avanzar de pregunta o terminar
                     if respuestaAcertada {
                         Button(action: siguientePregunta) {
                             HStack {
@@ -159,6 +172,7 @@ struct QuizVerdeView: View {
                         }
                         .padding(.horizontal, 24)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .accessibilityLabel(indicePreguntaActual + 1 < preguntasPartida.count ? "Avanzar a la siguiente pregunta" : "Reclamar premio final y terminar el quiz")
                     }
                 }
                 .padding(.bottom, 20)
@@ -169,6 +183,7 @@ struct QuizVerdeView: View {
         .onAppear {
             if preguntasPartida.isEmpty {
                 preguntasPartida = bancoPreguntas.shuffled()
+                anunciarPreguntaActual()
             }
         }
         .alert("¡Quiz Completado! 🎉", isPresented: $mostrarAlertaPremioFinal) {
@@ -179,6 +194,8 @@ struct QuizVerdeView: View {
             Text("¡Demostraste saber mucho sobre los árboles!\n\nTu recompensa ganada es:\n\(premioObtenidoTexto)\n\nSe ha guardado en tu mochila.")
         }
     }
+
+    // MARK: - Lógica de Juego y Anuncios de Voz
 
     private func estadoDeBoton(para indice: Int, pregunta: PreguntaQuiz) -> EstadoBotonQuiz {
         if respuestaAcertada && indice == pregunta.indiceCorrecto {
@@ -196,6 +213,13 @@ struct QuizVerdeView: View {
                 respuestaAcertada = true
             }
             mensajeMotivacional = pregunta.explicacion
+            exitoHaptico.notificationOccurred(.success)
+
+            // Anuncio para VoiceOver
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: "¡Correcto! \(pregunta.explicacion)"
+            )
         } else {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
                 _ = indicesFallados.insert(indiceSeleccionado)
@@ -206,11 +230,21 @@ struct QuizVerdeView: View {
                 "Esa no era, ¡pero estás muy cerca! 🔍",
                 "¡Buen intento! Piensa en cómo viven los árboles 🌳"
             ]
-            mensajeMotivacional = frasesAnimo.randomElement() ?? "¡Sigue intentando!"
+            let mensaje = frasesAnimo.randomElement() ?? "¡Sigue intentando!"
+            mensajeMotivacional = mensaje
+            alertaHaptica.notificationOccurred(.warning)
+
+            // Anuncio para VoiceOver
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: "Incorrecto. \(mensaje)"
+            )
         }
     }
 
     private func siguientePregunta() {
+        seleccionHaptica.selectionChanged()
+        
         if indicePreguntaActual + 1 < preguntasPartida.count {
             withAnimation {
                 indicePreguntaActual += 1
@@ -218,14 +252,33 @@ struct QuizVerdeView: View {
                 respuestaAcertada = false
                 mensajeMotivacional = "¡Vamos por otra! Elige tu respuesta 👇"
             }
+            anunciarPreguntaActual()
         } else {
             let premio = gameManager.agregarRecursoAleatorio()
             premioObtenidoTexto = "\(premio.icono) +1 \(premio.nombre)"
             mostrarAlertaPremioFinal = true
+            exitoHaptico.notificationOccurred(.success)
+
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: "¡Felicidades! Completaste el quiz. Ganaste una recompensa de \(premio.nombre) para tu mochila."
+            )
+        }
+    }
+
+    private func anunciarPreguntaActual() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            if let p = preguntaActual {
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: "Pregunta \(indicePreguntaActual + 1): \(p.texto)"
+                )
+            }
         }
     }
 }
 
+// MARK: - Estado y Botón de Opción con Accesibilidad
 enum EstadoBotonQuiz {
     case normal
     case correcto
@@ -234,6 +287,7 @@ enum EstadoBotonQuiz {
 
 struct BotonOpcionQuiz: View {
     let texto: String
+    let numeroOpcion: Int
     let estadoBoton: EstadoBotonQuiz
     let alPresionar: () -> Void
 
@@ -265,6 +319,27 @@ struct BotonOpcionQuiz: View {
             .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
         }
         .scaleEffect(estadoBoton == .correcto ? 1.02 : 1.0)
+        // Soporte integral de VoiceOver
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Opción \(numeroOpcion): \(texto)")
+        .accessibilityValue(valorAccesibilidad)
+        .accessibilityHint(pistaAccesibilidad)
+    }
+
+    private var valorAccesibilidad: String {
+        switch estadoBoton {
+        case .normal: return ""
+        case .correcto: return "Respuesta correcta seleccionada"
+        case .incorrectoReintentar: return "Opción incorrecta ya intentada"
+        }
+    }
+
+    private var pistaAccesibilidad: String {
+        switch estadoBoton {
+        case .normal: return "Toca dos veces para elegir esta opción."
+        case .correcto: return "Acierto. Pulsa siguiente pregunta abajo."
+        case .incorrectoReintentar: return "No disponible. Ya intentaste esta opción."
+        }
     }
 
     private var colorFondo: Color {
@@ -292,10 +367,11 @@ struct BotonOpcionQuiz: View {
     }
 }
 
-//Chip Contador de Recurso
+// MARK: - Chip Contador de Recurso con Accesibilidad
 struct RecursoBadge: View {
     let icono: String
     let valor: Int
+    var recursoNombre: String = "Recurso"
 
     var body: some View {
         HStack(spacing: 4) {
@@ -307,6 +383,8 @@ struct RecursoBadge: View {
         .padding(.vertical, 6)
         .background(.ultraThinMaterial)
         .clipShape(Capsule())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(recursoNombre) en mochila: \(valor)")
     }
 }
 

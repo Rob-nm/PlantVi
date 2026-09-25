@@ -1,71 +1,38 @@
-//
-//  PlantaView.swift
-//  PlantVi
-//
-//  Created by Brandiuxx on 31/08/26.
-//
-
 import SwiftUI
 internal import Combine
 
-//Modelo de datos
-struct PlantaGuardada: Identifiable {
-    let id = UUID()
-    let nombre: String
-    let icono: String
-}
-
-//Vista Principal
 struct PlantaView: View {
     @EnvironmentObject var gameManager: GameManager
-
-    // Niveles de la planta
-    @State private var nivelAgua: Double = 0.0
-    @State private var nivelAbono: Double = 0.0
-    @State private var nivelVida: Double = 100.0
 
     let temporizador = Timer.publish(every: 3.0, on: .main, in: .common).autoconnect()
 
     @State private var escalaPlanta: CGFloat = 1.0
     @State private var mostrandoLluvia: Bool = false
     @State private var mostrandoBrillos: Bool = false
+    @State private var mostrandoSpray: Bool = false
 
     @State private var especiesAdultas = ["🪴", "🌳", "🌵", "🌻", "🌴"]
     @State private var plantaSecretaActual: String = "🪴"
     @State private var moverNubes: Bool = false
 
-    @State private var miJardin: [PlantaGuardada] = []
     @State private var mostrarAlertaNombre: Bool = false
     @State private var nombreIngresado: String = ""
     @State private var mostrarModalInventario: Bool = false
 
-    // Generadores hápticos nativos para confirmación sensorial
-    private let exitoHaptico = UIImpactFeedbackGenerator(style: .medium)
+    private let exitoHaptico = UINotificationFeedbackGenerator()
+    private let toqueHaptico = UIImpactFeedbackGenerator(style: .light)
     private let alertaHaptica = UINotificationFeedbackGenerator()
 
     var esDeDia: Bool {
-        let horaActual = Calendar.current.component(.hour, from: Date())
-        return horaActual >= 6 && horaActual < 19
+        let hora = Calendar.current.component(.hour, from: Date())
+        return hora >= 6 && hora < 19
     }
 
     var iconoPlanta: String {
-        if nivelVida <= 0 { return "🍂" }
-        else if nivelAgua >= 100 && nivelAbono >= 100 { return plantaSecretaActual }
-        else if nivelAgua >= 30 && nivelAbono >= 30 { return "🌱" }
+        if gameManager.nivelVida <= 0 { return "🍂" }
+        else if gameManager.nivelAgua >= 100 && gameManager.nivelAbono >= 100 { return plantaSecretaActual }
+        else if gameManager.nivelAgua >= 30 && gameManager.nivelAbono >= 30 { return "🌱" }
         else { return "🌰" }
-    }
-
-    // Descripción en lenguaje natural para VoiceOver
-    var descripcionEstadoPlanta: String {
-        if nivelVida <= 0 {
-            return "Planta marchita. Tu planta necesita agua y abono de inmediato para revivir."
-        } else if nivelAgua >= 100 && nivelAbono >= 100 {
-            return "Planta completamente crecida y saludable. Lista para llevarla al refugio."
-        } else if nivelAgua >= 30 && nivelAbono >= 30 {
-            return "Planta en etapa de brote verde, creciendo sanamente."
-        } else {
-            return "Semilla en la tierra, esperando agua y abono para germinar."
-        }
     }
 
     var body: some View {
@@ -76,141 +43,139 @@ struct PlantaView: View {
                     startPoint: .top, endPoint: .bottom
                 ).ignoresSafeArea()
 
-                // Fondo dinámico (Sol/Luna)
                 VStack {
                     HStack {
                         Text(esDeDia ? "☁️" : "🌙").font(.system(size: 80))
                             .offset(x: moverNubes ? 250 : -250)
                             .animation(.linear(duration: 25).repeatForever(autoreverses: false), value: moverNubes)
-                            .accessibilityLabel(esDeDia ? "Es de día con cielo despejado y nubes" : "Es de noche con cielo estrellado")
                         Spacer()
                     }.padding(.top, 50)
                     Spacer()
-                }.onAppear { moverNubes = true }
+                }
+                .accessibilityHidden(true)
+                .onAppear { moverNubes = true }
 
-                VStack(spacing: 24) {
-
-                    // Barras de progreso con lectura numérica para VoiceOver
+                VStack(spacing: 20) {
+                    // Barras de progreso
                     VStack(spacing: 12) {
-                        ProgressView("❤️ Vida", value: nivelVida, total: 100)
-                            .tint(.red)
-                            .accessibilityLabel("Salud de la planta")
-                            .accessibilityValue("\(Int(nivelVida)) por ciento")
-
-                        ProgressView("💧 Agua", value: nivelAgua, total: 100)
-                            .tint(.blue)
-                            .accessibilityLabel("Nivel de agua")
-                            .accessibilityValue("\(Int(nivelAgua)) por ciento")
-
-                        ProgressView("🌱 Abono", value: nivelAbono, total: 100)
-                            .tint(.brown)
-                            .accessibilityLabel("Nivel de abono")
-                            .accessibilityValue("\(Int(nivelAbono)) por ciento")
+                        ProgressView("❤️ Vida", value: gameManager.nivelVida, total: 100).tint(.red)
+                            .accessibilityLabel("Nivel de vida: \(Int(gameManager.nivelVida)) por ciento")
+                        ProgressView("💧 Agua", value: gameManager.nivelAgua, total: 100).tint(.blue)
+                            .accessibilityLabel("Nivel de agua: \(Int(gameManager.nivelAgua)) por ciento")
+                        ProgressView("🌱 Abono", value: gameManager.nivelAbono, total: 100).tint(.brown)
+                            .accessibilityLabel("Nivel de abono: \(Int(gameManager.nivelAbono)) por ciento")
                     }
                     .padding().background(.ultraThinMaterial).cornerRadius(15).padding(.horizontal).bold()
 
-                    HStack(spacing: 16) {
-                        HStack(spacing: 6) {
-                            Text("💧")
-                            Text("\(gameManager.inventarioAgua) disponibles")
-                                .font(.caption.bold())
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Agua disponible en mochila: \(gameManager.inventarioAgua) raciones")
+                    // Indicadores rápidos de la mochila
+                    HStack(spacing: 12) {
+                        Text("💧 \(gameManager.inventarioAgua)")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(.ultraThinMaterial).clipShape(Capsule())
+                            .accessibilityLabel("Agua disponible: \(gameManager.inventarioAgua) raciones")
 
-                        HStack(spacing: 6) {
-                            Text("🌱")
-                            Text("\(gameManager.inventarioAbono) disponibles")
-                                .font(.caption.bold())
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Abono disponible en mochila: \(gameManager.inventarioAbono) raciones")
+                        Text("🌱 \(gameManager.inventarioAbono)")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(.ultraThinMaterial).clipShape(Capsule())
+                            .accessibilityLabel("Abono disponible: \(gameManager.inventarioAbono) raciones")
+
+                        Text("🧴 \(gameManager.inventarioSpray)")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(.ultraThinMaterial).clipShape(Capsule())
+                            .accessibilityLabel("Sprays curativos disponibles: \(gameManager.inventarioSpray)")
                     }
 
                     Spacer()
 
-                    // Planta Principal
-                    ZStack {
-                        Text(iconoPlanta)
-                            .font(.system(size: 150))
-                            .scaleEffect(escalaPlanta)
-                            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: escalaPlanta)
+                    // Centro visual aislado para el compilador
+                    CentroPlantaView(
+                        iconoPlanta: iconoPlanta,
+                        escalaPlanta: escalaPlanta,
+                        tienePlaga: gameManager.tienePlaga,
+                        iconoPlaga: gameManager.iconoPlaga,
+                        nivelVida: gameManager.nivelVida,
+                        nivelAgua: gameManager.nivelAgua,
+                        nivelAbono: gameManager.nivelAbono,
+                        mostrandoLluvia: mostrandoLluvia,
+                        mostrandoBrillos: mostrandoBrillos,
+                        mostrandoSpray: mostrandoSpray,
+                        alRegar: ejecutarRegar,
+                        alAbonar: ejecutarAbonar,
+                        alCurar: ejecutarCurarPlaga
+                    )
 
-                        if mostrandoLluvia { Text("🌧️").font(.system(size: 80)).offset(y: -120).transition(.opacity).accessibilityHidden(true) }
-                        if mostrandoBrillos { Text("✨").font(.system(size: 60)).offset(y: 80).transition(.opacity).accessibilityHidden(true) }
+                    // Mensaje de estado
+                    if gameManager.tienePlaga && gameManager.nivelVida > 0 {
+                        Text("¡Una plaga está atacando tu planta! ⚠️")
+                            .font(.subheadline.bold())
+                            .foregroundColor(.yellow)
+                            .accessibilityLabel("Alerta: Una plaga está atacando tu planta. Usa el spray para curarla.")
+                    } else {
+                        Text(gameManager.nivelVida <= 0 ? "¡Tu planta necesita ayuda!" : (gameManager.nivelAgua >= 100 && gameManager.nivelAbono >= 100 ? "¡Planta Lista!" : "Cuidando mi semilla"))
+                            .font(.title2).bold().foregroundColor(.white)
+                            .accessibilityLabel(gameManager.nivelVida <= 0 ? "Tu planta necesita ayuda" : (gameManager.nivelAgua >= 100 && gameManager.nivelAbono >= 100 ? "¡Planta lista para cosechar!" : "Cuidando mi semilla"))
                     }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Tu planta")
-                    .accessibilityValue(descripcionEstadoPlanta)
-                    .accessibilityHint("Regar o abonar para ayudarla a crecer")
-
-                    Text(nivelVida <= 0 ? "¡Tu planta necesita ayuda!" : (nivelAgua >= 100 && nivelAbono >= 100 ? "¡Planta Lista!" : "Cuidando mi semilla"))
-                        .font(.title2).bold().foregroundColor(.white)
-                        .accessibilityLabel(nivelVida <= 0 ? "Tu planta necesita ayuda urgente" : (nivelAgua >= 100 && nivelAbono >= 100 ? "Planta lista para cosechar" : "Cuidando mi semilla"))
 
                     Spacer()
 
-                    // Botones de acción principales
-                    VStack {
-                        if nivelAgua >= 100 && nivelAbono >= 100 && nivelVida > 0 {
-                            Button(action: {
-                                alertaHaptica.notificationOccurred(.success)
-                                UIAccessibility.post(notification: .announcement, argument: "Abriendo ventana para bautizar y mover al refugio.")
-                                mostrarAlertaNombre = true
-                            }) {
+                    // Controles inferiores
+                    VStack(spacing: 12) {
+                        if gameManager.tienePlaga && gameManager.nivelVida > 0 {
+                            Button(action: ejecutarCurarPlaga) {
+                                HStack {
+                                    Image(systemName: "cross.vial.fill")
+                                    Text("Usar Spray Anti-Plagas (\(gameManager.inventarioSpray))")
+                                }
+                                .font(.headline).foregroundColor(.white).padding().frame(maxWidth: .infinity)
+                                .background(gameManager.inventarioSpray > 0 ? Color.orange : Color.gray.opacity(0.6))
+                                .cornerRadius(15)
+                            }
+                            .disabled(gameManager.inventarioSpray == 0)
+                            .accessibilityLabel("Usar spray anti-plagas")
+                            .accessibilityValue("\(gameManager.inventarioSpray) sprays disponibles")
+                            .accessibilityHint("Elimina la plaga y salva a tu planta.")
+                        }
+
+                        if gameManager.nivelAgua >= 100 && gameManager.nivelAbono >= 100 && gameManager.nivelVida > 0 {
+                            Button(action: { mostrarAlertaNombre = true }) {
                                 Text("Mover al Refugio")
                                     .font(.headline).padding().frame(maxWidth: .infinity)
                                     .background(Color.green).foregroundColor(.white).cornerRadius(15)
                             }
                             .accessibilityLabel("Mover planta al refugio")
-                            .accessibilityHint("Guarda esta planta adulta en tu jardín y comienza una nueva")
+                            .accessibilityHint("Bautiza a tu planta adulta y guárdala en tu colección del jardín.")
                         } else {
                             HStack(spacing: 16) {
-                                // Botón Regar
-                                Button(action: regarPlanta) {
+                                Button(action: ejecutarRegar) {
                                     VStack(spacing: 2) {
-                                        Text("Regar")
-                                            .font(.headline)
-                                        Text("Usa 1 💧 (\(gameManager.inventarioAgua))")
-                                            .font(.caption2)
+                                        Text("Regar").font(.headline)
+                                        Text("(\(gameManager.inventarioAgua) 💧)").font(.caption2)
                                     }
-                                    .padding(.vertical, 12)
-                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12).frame(maxWidth: .infinity)
                                     .background(gameManager.inventarioAgua > 0 ? Color.blue : Color.gray.opacity(0.6))
-                                    .foregroundColor(.white)
-                                    .cornerRadius(15)
+                                    .foregroundColor(.white).cornerRadius(15)
                                 }
                                 .disabled(gameManager.inventarioAgua == 0)
                                 .accessibilityLabel("Regar planta")
-                                .accessibilityValue("\(gameManager.inventarioAgua) gotas disponibles")
-                                .accessibilityHint(gameManager.inventarioAgua > 0 ? "Gasta 1 de agua y aumenta la hidratación y vida" : "No tienes agua. Consigue más en los juegos")
+                                .accessibilityValue("\(gameManager.inventarioAgua) raciones de agua disponibles")
+                                .accessibilityHint("Aumenta el agua y recupera la vida de tu planta.")
 
-                                // Botón Abonar
-                                Button(action: abonarPlanta) {
+                                Button(action: ejecutarAbonar) {
                                     VStack(spacing: 2) {
-                                        Text("Abonar")
-                                            .font(.headline)
-                                        Text("Usa 1 🌱 (\(gameManager.inventarioAbono))")
-                                            .font(.caption2)
+                                        Text("Abonar").font(.headline)
+                                        Text("(\(gameManager.inventarioAbono) 🌱)").font(.caption2)
                                     }
-                                    .padding(.vertical, 12)
-                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12).frame(maxWidth: .infinity)
                                     .background(gameManager.inventarioAbono > 0 ? Color.brown : Color.gray.opacity(0.6))
-                                    .foregroundColor(.white)
-                                    .cornerRadius(15)
+                                    .foregroundColor(.white).cornerRadius(15)
                                 }
                                 .disabled(gameManager.inventarioAbono == 0)
                                 .accessibilityLabel("Abonar planta")
-                                .accessibilityValue("\(gameManager.inventarioAbono) abonos disponibles")
-                                .accessibilityHint(gameManager.inventarioAbono > 0 ? "Gasta 1 de abono y nutre a la planta" : "No tienes abono. Ve al juego de reciclaje para conseguir más")
+                                .accessibilityValue("\(gameManager.inventarioAbono) raciones de abono disponibles")
+                                .accessibilityHint("Nutre la tierra y ayuda a crecer a tu planta.")
                             }
                         }
                     }
@@ -219,39 +184,41 @@ struct PlantaView: View {
                 .padding(.bottom, 20)
             }
             .onReceive(temporizador) { _ in
-                if (nivelAgua < 100 || nivelAbono < 100) && nivelVida > 0 {
-                    nivelVida = max(0, nivelVida - 5)
+                let teniaPlagaAntes = gameManager.tienePlaga
+                gameManager.ticTemporizador()
+                
+                if Int.random(in: 1...10) == 1 {
+                    gameManager.generarPlagaAleatoria()
+                    if !teniaPlagaAntes && gameManager.tienePlaga {
+                        alertaHaptica.notificationOccurred(.warning)
+                        UIAccessibility.post(
+                            notification: .announcement,
+                            argument: "¡Cuidado! Ha aparecido una plaga sobre tu planta. Usa el spray para salvarla."
+                        )
+                    }
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(action: {
-                        exitoHaptico.impactOccurred()
-                        mostrarModalInventario = true
-                    }) {
+                    Button(action: { mostrarModalInventario = true }) {
                         Label("Mochila", systemImage: "backpack.fill")
                             .font(.subheadline.bold())
                             .foregroundColor(.white)
                     }
-                    .accessibilityLabel("Abrir Mochila e Inventario")
+                    .accessibilityLabel("Abrir mochila de recursos")
+                    .accessibilityHint("Gestiona tu agua, abono y sprays guardados.")
                 }
-
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(destination: JardinView(coleccion: miJardin)) {
+                    NavigationLink(destination: JardinView()) {
                         Text("🪴").font(.title3)
                     }
-                    .accessibilityLabel("Ver Mi Refugio de Plantas")
+                    .accessibilityLabel("Ver Mi Refugio")
+                    .accessibilityHint("Entra a ver todas las plantas que has rescatado.")
                 }
             }
             .sheet(isPresented: $mostrarModalInventario) {
-                InventarioModalView(
-                    nivelAgua: $nivelAgua,
-                    nivelAbono: $nivelAbono,
-                    onAccionAplicada: { tipo in
-                        recuperarVida()
-                        activarEfecto(tipo: tipo)
-                    }
-                )
+                InventarioModalView()
+                    .environmentObject(gameManager)
             }
             .alert("Bautiza a tu planta", isPresented: $mostrarAlertaNombre) {
                 TextField("Nombre (ej. Panchito)", text: $nombreIngresado)
@@ -263,36 +230,48 @@ struct PlantaView: View {
         }
     }
 
-    // MARK: - Acciones con Anuncios de Voz y Hápticos
-
-    private func regarPlanta() {
-        if gameManager.inventarioAgua > 0 {
-            gameManager.inventarioAgua -= 1
-            if nivelAgua < 100 { nivelAgua = min(100, nivelAgua + 10) }
-            recuperarVida()
-            activarEfecto(tipo: "agua")
-            exitoHaptico.impactOccurred()
-            
-            UIAccessibility.post(
-                notification: .announcement,
-                argument: "Planta regada. Nivel de agua al \(Int(nivelAgua)) por ciento."
-            )
+    private func ejecutarRegar() {
+        guard gameManager.inventarioAgua > 0 else {
+            UIAccessibility.post(notification: .announcement, argument: "No tienes agua en tu mochila. Consigue más en los juegos.")
+            return
         }
+        toqueHaptico.impactOccurred()
+        gameManager.regar()
+        activarEfecto(tipo: "agua")
+        UIAccessibility.post(
+            notification: .announcement,
+            argument: "Planta regada. Nivel de agua al \(Int(gameManager.nivelAgua)) por ciento."
+        )
     }
 
-    private func abonarPlanta() {
-        if gameManager.inventarioAbono > 0 {
-            gameManager.inventarioAbono -= 1
-            if nivelAbono < 100 { nivelAbono = min(100, nivelAbono + 10) }
-            recuperarVida()
-            activarEfecto(tipo: "abono")
-            exitoHaptico.impactOccurred()
-            
-            UIAccessibility.post(
-                notification: .announcement,
-                argument: "Planta abonada. Nivel de abono al \(Int(nivelAbono)) por ciento."
-            )
+    private func ejecutarAbonar() {
+        guard gameManager.inventarioAbono > 0 else {
+            UIAccessibility.post(notification: .announcement, argument: "No tienes abono en tu mochila. Clasifica basura en el taller para crear más.")
+            return
         }
+        toqueHaptico.impactOccurred()
+        gameManager.abonar()
+        activarEfecto(tipo: "abono")
+        UIAccessibility.post(
+            notification: .announcement,
+            argument: "Planta abonada. Nivel de abono al \(Int(gameManager.nivelAbono)) por ciento."
+        )
+    }
+
+    private func ejecutarCurarPlaga() {
+        guard gameManager.inventarioSpray > 0 else {
+            UIAccessibility.post(notification: .announcement, argument: "No tienes sprays curativos. Juega al memorama para ganar uno.")
+            return
+        }
+        exitoHaptico.notificationOccurred(.success)
+        withAnimation {
+            gameManager.curarPlaga()
+            activarEfecto(tipo: "spray")
+        }
+        UIAccessibility.post(
+            notification: .announcement,
+            argument: "¡Plaga eliminada con éxito! Tu planta está a salvo."
+        )
     }
 
     func activarEfecto(tipo: String) {
@@ -300,144 +279,212 @@ struct PlantaView: View {
         withAnimation {
             if tipo == "agua" { mostrandoLluvia = true }
             if tipo == "abono" { mostrandoBrillos = true }
+            if tipo == "spray" { mostrandoSpray = true }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            withAnimation { mostrandoLluvia = false; mostrandoBrillos = false; escalaPlanta = 1.0 }
-        }
-    }
-
-    func recuperarVida() {
-        if nivelVida < 100 {
-            nivelVida = min(100, nivelVida + 15)
+            withAnimation {
+                mostrandoLluvia = false
+                mostrandoBrillos = false
+                mostrandoSpray = false
+                escalaPlanta = 1.0
+            }
         }
     }
 
     func guardarPlanta() {
-        let nombreFinal = nombreIngresado.isEmpty ? "Sin nombre" : nombreIngresado
-        let nuevaPlanta = PlantaGuardada(nombre: nombreFinal, icono: plantaSecretaActual)
-        miJardin.append(nuevaPlanta)
-
-        UIAccessibility.post(notification: .announcement, argument: "Planta \(nombreFinal) guardada con éxito en el refugio.")
-
-        nivelAgua = 0.0; nivelAbono = 0.0; nivelVida = 100.0
+        gameManager.moverAlRefugio(nombre: nombreIngresado, icono: plantaSecretaActual)
+        let nombreAsignado = nombreIngresado.isEmpty ? "tu planta" : nombreIngresado
         nombreIngresado = ""
         plantaSecretaActual = especiesAdultas.randomElement() ?? "🪴"
+        
+        exitoHaptico.notificationOccurred(.success)
+        UIAccessibility.post(
+            notification: .announcement,
+            argument: "¡Felicidades! Has guardado a \(nombreAsignado) en tu refugio. Comienza a cuidar una nueva semilla."
+        )
     }
 }
 
-// MARK: - Modal de Inventario con Accesibilidad
+//Subvista Aislada: Planta y Efectos Visuales
+
+struct CentroPlantaView: View {
+    let iconoPlanta: String
+    let escalaPlanta: CGFloat
+    let tienePlaga: Bool
+    let iconoPlaga: String
+    let nivelVida: Double
+    let nivelAgua: Double
+    let nivelAbono: Double
+    let mostrandoLluvia: Bool
+    let mostrandoBrillos: Bool
+    let mostrandoSpray: Bool
+    let alRegar: () -> Void
+    let alAbonar: () -> Void
+    let alCurar: () -> Void
+
+    private var descripcionPlanta: String {
+        if nivelVida <= 0 {
+            return "Tu planta está marchita y necesita cuidados."
+        } else if nivelAgua >= 100 && nivelAbono >= 100 {
+            return "Tu planta ha crecido por completo y está lista para el refugio."
+        } else if nivelAgua >= 30 && nivelAbono >= 30 {
+            return "Tu planta es un brote verde en crecimiento."
+        } else {
+            return "Tu planta es una semilla en la tierra."
+        }
+    }
+
+    private var valorAccesible: String {
+        let vida = Int(nivelVida)
+        let plaga = tienePlaga ? "¡Atención! Tiene una plaga encima." : ""
+        return "\(descripcionPlanta) Vida al \(vida) por ciento. \(plaga)"
+    }
+
+    var body: some View {
+        ZStack {
+            Text(iconoPlanta)
+                .font(.system(size: 150))
+                .scaleEffect(escalaPlanta)
+                .animation(.spring(response: 0.3, dampingFraction: 0.5), value: escalaPlanta)
+
+            if tienePlaga && nivelVida > 0 {
+                Text(iconoPlaga)
+                    .font(.system(size: 44))
+                    .offset(x: 45, y: -40)
+                    .transition(.scale)
+            }
+
+            if mostrandoLluvia {
+                Text("🌧️")
+                    .font(.system(size: 80))
+                    .offset(y: -120)
+                    .transition(.opacity)
+            }
+
+            if mostrandoBrillos {
+                Text("✨")
+                    .font(.system(size: 60))
+                    .offset(y: 80)
+                    .transition(.opacity)
+            }
+
+            if mostrandoSpray {
+                Text("💨")
+                    .font(.system(size: 60))
+                    .offset(x: 40, y: -30)
+                    .transition(.opacity)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Planta principal")
+        .accessibilityValue(valorAccesible)
+        .accessibilityHint("Usa las acciones para regar, abonar o curar.")
+        .accessibilityAction(named: "Regar planta", alRegar)
+        .accessibilityAction(named: "Abonar planta", alAbonar)
+        .accessibilityAction(named: "Curar plaga con spray", alCurar)
+    }
+}
+
+// MARK: - Modal de Mochila
+
 struct InventarioModalView: View {
     @EnvironmentObject var gameManager: GameManager
-    @Binding var nivelAgua: Double
-    @Binding var nivelAbono: Double
-    var onAccionAplicada: (String) -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                Text("Recursos disponibles para cuidar tu planta:")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-
-                VStack(spacing: 16) {
-                    // Tarjeta Agua
-                    HStack(spacing: 16) {
-                        Text("💧").font(.system(size: 40)).accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Agua Dulce").font(.headline)
-                            Text("Tienes: \(gameManager.inventarioAgua)").font(.subheadline).foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Button("Aplicar") {
-                            if gameManager.inventarioAgua > 0 {
-                                gameManager.inventarioAgua -= 1
-                                nivelAgua = min(100, nivelAgua + 10)
-                                onAccionAplicada("agua")
-                                UIAccessibility.post(notification: .announcement, argument: "Agua aplicada desde la mochila.")
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.blue)
-                        .disabled(gameManager.inventarioAgua == 0)
-                        .accessibilityLabel("Aplicar agua a la planta")
-                    }
-                    .padding()
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(14)
-                    .accessibilityElement(children: .combine)
-
-                    HStack(spacing: 16) {
-                        Text("🌱").font(.system(size: 40)).accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Abono Orgánico").font(.headline)
-                            Text("Tienes: \(gameManager.inventarioAbono)").font(.subheadline).foregroundColor(.secondary)
-                        }
-                        Spacer()
-                        Button("Aplicar") {
-                            if gameManager.inventarioAbono > 0 {
-                                gameManager.inventarioAbono -= 1
-                                nivelAbono = min(100, nivelAbono + 10)
-                                onAccionAplicada("abono")
-                                UIAccessibility.post(notification: .announcement, argument: "Abono aplicado desde la mochila.")
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.brown)
-                        .disabled(gameManager.inventarioAbono == 0)
-                        .accessibilityLabel("Aplicar abono a la planta")
-                    }
-                    .padding()
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .cornerRadius(14)
-                    .accessibilityElement(children: .combine)
+            VStack(spacing: 16) {
+                filaRecurso(icono: "💧", nombre: "Agua dulce", cantidad: gameManager.inventarioAgua, color: .blue) {
+                    gameManager.regar()
+                    UIAccessibility.post(notification: .announcement, argument: "Usaste 1 de agua dulce.")
                 }
-                .padding(.horizontal)
+                
+                filaRecurso(icono: "🌱", nombre: "Abono orgánico", cantidad: gameManager.inventarioAbono, color: .brown) {
+                    gameManager.abonar()
+                    UIAccessibility.post(notification: .announcement, argument: "Usaste 1 de abono orgánico.")
+                }
+                
+                filaRecurso(icono: "🧴", nombre: "Spray Anti-Plagas", cantidad: gameManager.inventarioSpray, color: .orange) {
+                    gameManager.curarPlaga()
+                    UIAccessibility.post(notification: .announcement, argument: "Usaste 1 spray anti-plagas.")
+                }
 
                 Spacer()
             }
-            .padding(.top, 16)
+            .padding()
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Mochila 🎒")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Cerrar") { dismiss() }
+                    Button("Listo") { dismiss() }
+                        .accessibilityLabel("Cerrar mochila")
                 }
             }
         }
     }
+    
+    @ViewBuilder
+    private func filaRecurso(icono: String, nombre: String, cantidad: Int, color: Color, accion: @escaping () -> Void) -> some View {
+        HStack(spacing: 16) {
+            Text(icono).font(.system(size: 38))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(nombre).font(.headline)
+                Text("Disponibles: \(cantidad)").font(.caption).foregroundColor(.secondary)
+            }
+            Spacer()
+            Button("Usar", action: accion)
+                .buttonStyle(.borderedProminent)
+                .tint(color)
+                .disabled(cantidad == 0)
+                .accessibilityLabel("Usar \(nombre)")
+                .accessibilityValue("\(cantidad) disponibles")
+                .accessibilityHint(cantidad > 0 ? "Aplica este recurso inmediatamente a tu planta." : "Agotado. Juega a los minijuegos para conseguir más.")
+        }
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .cornerRadius(14)
+    }
 }
 
-// MARK: - Vista Refugio
+// MARK: - Vista Jardín
+
 struct JardinView: View {
-    var coleccion: [PlantaGuardada]
+    @EnvironmentObject var gameManager: GameManager
 
     var body: some View {
         ZStack {
             Color.green.opacity(0.1).ignoresSafeArea()
-            if coleccion.isEmpty {
+            if gameManager.jardinGuardado.isEmpty {
                 Text("Tu refugio está vacío. ¡Sigue cuidando plantas para repoblar el bosque!")
                     .font(.headline)
                     .multilineTextAlignment(.center)
                     .foregroundColor(.gray)
                     .padding()
-                    .accessibilityLabel("El refugio está vacío. Aún no tienes plantas guardadas.")
+                    .accessibilityLabel("Tu refugio está vacío. Cuida plantas hasta que crezcan para salvarlas aquí.")
             } else {
-                List(coleccion) { planta in
-                    HStack(spacing: 20) {
-                        Text(planta.icono).font(.system(size: 50)).accessibilityHidden(true)
-                        Text(planta.nombre).font(.title3).bold()
+                List(gameManager.jardinGuardado) { planta in
+                    HStack(spacing: 16) {
+                        Text(planta.icono ?? "🪴").font(.system(size: 40))
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(planta.nombre ?? "Sin nombre").font(.headline)
+                            if let fecha = planta.fecha {
+                                Text(fecha.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                     }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Planta guardada: \(planta.nombre)")
                     .listRowBackground(Color.clear)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Planta guardada: \(planta.nombre ?? "Sin nombre"). Rescatada el \(planta.fecha?.formatted(date: .long, time: .omitted) ?? "recientemente").")
                 }
                 .scrollContentBackground(.hidden)
             }
-        }.navigationTitle("Mi Refugio")
+        }
+        .navigationTitle("Mi Refugio")
     }
 }
 
