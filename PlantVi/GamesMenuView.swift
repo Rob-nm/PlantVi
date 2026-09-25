@@ -1,3 +1,4 @@
+//
 //  GamesMenuView.swift
 //  PlantVi
 //
@@ -8,7 +9,7 @@
 
 import SwiftUI
 
-// MARK: - Modelo de un minijuego
+// Modelo de un minijuego
 
 struct Juego: Identifiable {
     let id = UUID()
@@ -18,7 +19,7 @@ struct Juego: Identifiable {
     let descripcion: String
 }
 
-// MARK: - Menú principal de juegos
+// Menú principal de juegos
 
 struct GamesMenuView: View {
 
@@ -46,89 +47,146 @@ struct GamesMenuView: View {
             icono: "square.grid.2x2.fill",
             color: .purple,
             descripcion: "Encuentra las parejas de especies de árboles"
-        ),
-        Juego(
-            nombre: "Esquiva la Tala",
-            icono: "scissors",
-            color: .red,
-            descripcion: "Esquiva las motosierras y protege al bosque"
-        ),
-        Juego(
-            nombre: "Siembra Exprés",
-            icono: "leaf.arrow.circlepath",
-            color: .green,
-            descripcion: "Planta semillas antes de que se acabe el tiempo"
         )
     ]
 
-    let columnas = [GridItem(.flexible()), GridItem(.flexible())]
+    let columnas = [
+        GridItem(.adaptive(minimum: 155, maximum: 190), spacing: 16)
+    ]
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVGrid(columns: columnas, spacing: 20) {
-                    ForEach(juegos) { juego in
-                        NavigationLink(destination: destinoJuego(para: juego)) {
-                            TarjetaJuego(juego: juego)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Elige una actividad")
+                            .font(.title3.bold())
+                            .foregroundColor(.primary)
+                        
+                        Text("Gana agua, abono y recursos para cuidar tu planta.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.top, 4)
+
+                    LazyVGrid(columns: columnas, spacing: 16) {
+                        ForEach(juegos) { juego in
+                            NavigationLink(destination: destinoJuego(para: juego)) {
+                                TarjetaJuego(juego: juego)
+                            }
+                            .buttonStyle(BotonTarjetaEstilo())
                         }
-                        .buttonStyle(.plain)
                     }
                 }
-                .padding()
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Minijuegos 🎮")
         }
     }
 
-    // MARK: - Enrutador de Juegos
+    //Enrutador de Juegos
     
-        @ViewBuilder
-        private func destinoJuego(para juego: Juego) -> some View {
-            switch juego.nombre {
-            case "Recolecta Agua":
-                RecolectaAguaView() // ¡Ya no requiere pasar bindings manualmente!
-                
-            case "Recicla y Abona":
-                AbonoGameView()
-                
-            default:
-                PlaceholderGameView(juego: juego)
-            }
+    @ViewBuilder
+    private func destinoJuego(para juego: Juego) -> some View {
+        switch juego.nombre {
+        case "Recolecta Agua":
+            RecolectaAguaView()
+            
+        case "Recicla y Abona":
+            AbonoGameView()
+            
+        case "Memorama Forestal":
+            MemoramaForestalView()
+        
+        case "Quiz Verde":
+            QuizVerdeView()
+            
+        default:
+            PlaceholderGameView(juego: juego)
         }
+    }
 }
 
-// MARK: - Tarjeta visual de cada juego
+//Tarjeta visual de cada juego
 
 struct TarjetaJuego: View {
     let juego: Juego
 
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: juego.icono)
-                .font(.system(size: 36))
-                .foregroundColor(.white)
-                .frame(width: 68, height: 68)
-                .background(juego.color)
-                .clipShape(Circle())
+            
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [juego.color.opacity(0.85), juego.color],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 64, height: 64)
+                    .shadow(color: juego.color.opacity(0.35), radius: 8, x: 0, y: 4)
 
-            Text(juego.nombre)
-                .font(.subheadline).bold()
-                .multilineTextAlignment(.center)
-                .foregroundColor(.primary)
+                Image(systemName: juego.icono)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            .padding(.top, 4)
 
-            Text(juego.descripcion)
-                .font(.caption2)
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .lineLimit(2)
+            // Textos
+            VStack(spacing: 4) {
+                Text(juego.nombre)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+
+                Text(juego.descripcion)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 4)
+
+            HStack(spacing: 4) {
+                Text("Jugar")
+                    .font(.caption2.bold())
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.caption2)
+            }
+            .foregroundColor(juego.color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(juego.color.opacity(0.12))
+            .clipShape(Capsule())
         }
-        .padding()
+        .padding(14)
         .frame(maxWidth: .infinity)
-        .frame(height: 170)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
+        .frame(minHeight: 200)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 3)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.primary.opacity(0.04), lineWidth: 1)
+        )
+    }
+}
+
+struct BotonTarjetaEstilo: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
